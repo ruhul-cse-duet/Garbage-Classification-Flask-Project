@@ -1,0 +1,25 @@
+# PyTorch and Computer Vision
+torch>=2.7.1
+torchvision>=0.22.1
+
+# Image Processing
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0
+
+# Backend API
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.20
+
+# Frontend
+flask>=3.1.0
+werkzeug>=3.0.0
+
+# HTTP Requests
+requests>=2.31.0
+
+# Scientific Computing
+numpy>=1.26.4
+
+# Logging and Utilities
+python-dotenv>=1.0.0

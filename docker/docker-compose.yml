@@ -1,0 +1,18 @@
+version: "3.12"
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+
+  frontend:
+    image: python:3.12
+    working_dir: /ui
+    volumes:
+      - ./frontend:/ui
+    command: python apps.py
+    ports:
+      - "5000:5000"
+    depends_on:
+      - backend

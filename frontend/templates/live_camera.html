@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Garbage Detection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <div class="card camera-card">
+        <h1>📹 Live Garbage Detection</h1>
+        <p class="subtitle">Real-time classification with bounding box</p>
+
+        <!-- Camera Status -->
+        <div id="cameraStatus" class="status-box">
+            <span id="statusText">🔄 Initializing camera...</span>
+        </div>
+
+        <!-- Video Wrapper with Detection Box -->
+        <div class="video-wrapper" id="videoWrapper" style="display:none;">
+            <video id="video" autoplay playsinline muted></video>
+
+            <!-- Detection Bounding Box -->
+            <div id="bbox">
+                <div id="bbox-label">Detecting...</div>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorBox" class="error-box" style="display:none;"></div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn" id="startBtn" style="display:none;">
+                ▶️ Start Detection
+            </button>
+            <button class="btn" id="stopBtn" style="display:none; background:#e74c3c;">
+                ⏸️ Stop Detection
+            </button>
+            <a href="/" class="back-btn">⬅️ Back to Upload</a>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-box" id="statsBox" style="display:none;">
+            <div class="stat-item">
+                <span class="stat-label">Predictions:</span>
+                <span class="stat-value" id="predictionCount">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Avg Confidence:</span>
+                <span class="stat-value" id="avgConfidence">0%</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">FPS:</span>
+                <span class="stat-value" id="fps">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Elements
+const video = document.getElementById("video");
+const videoWrapper = document.getElementById("videoWrapper");
+const bbox = document.getElementById("bbox");
+const label = document.getElementById("bbox-label");
+const statusText = document.getElementById("statusText");
+const cameraStatus = document.getElementById("cameraStatus");
+const errorBox = document.getElementById("errorBox");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const statsBox = document.getElementById("statsBox");
+
+// Stats
+let predictionCount = 0;
+let totalConfidence = 0;
+let lastFrameTime = Date.now();
+let currentFPS = 0;
+
+// Detection state
+let isDetecting = false;
+let detectionInterval = null;
+
+// Class-wise styles
+const classMap = {
+    battery:   {icon:"🔋", color:"#e74c3c"},
+    biological:{icon:"🧫", color:"#2ecc71"},
+    cardboard: {icon:"📦", color:"#a97142"},
+    clothes:   {icon:"👕", color:"#9b59b6"},
+    glass:     {icon:"🍾", color:"#1abc9c"},
+    metal:     {icon:"🥫", color:"#7f8c8d"},
+    paper:     {icon:"📄", color:"#3498db"},
+    plastic:   {icon:"🧴", color:"#f39c12"},
+    shoes:     {icon:"👟", color:"#34495e"},
+    trash:     {icon:"🚯", color:"#2c3e50"}
+};
+
+// Initialize camera
+async function initCamera() {
+    try {
+        statusText.textContent = "🔄 Requesting camera access...";
+        
+        const constraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: "environment"
+            }
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        
+        // Wait for video to load
+        video.onloadedmetadata = () => {
+            cameraStatus.style.display = "none";
+            videoWrapper.style.display = "block";
+            startBtn.style.display = "inline-block";
+            statsBox.style.display = "flex";
+            showStatus("✅ Camera ready! Click 'Start Detection' to begin.", "success");
+        };
+        
+    } catch (error) {
+        console.error("Camera error:", error);
+        let errorMessage = "❌ Camera access denied or unavailable. ";
+        
+        if (error.name === "NotAllowedError") {
+            errorMessage += "Please allow camera access in your browser settings.";
+        } else if (error.name === "NotFoundError") {
+            errorMessage += "No camera found on this device.";
+        } else if (error.name === "NotReadableError") {
+            errorMessage += "Camera is being used by another application.";
+        } else {
+            errorMessage += error.message || "Unknown error occurred.";
+        }
+        
+        showError(errorMessage);
+        startBtn.style.display = "none";
+    }
+}
+
+// Start detection
+function startDetection() {
+    if (isDetecting) return;
+    
+    isDetecting = true;
+    startBtn.style.display = "none";
+    stopBtn.style.display = "inline-block";
+    
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    
+    detectionInterval = setInterval(() => {
+        if (video.videoWidth === 0 || !isDetecting) return;
+        
+        // Calculate FPS
+        const now = Date.now();
+        const delta = now - lastFrameTime;
+        currentFPS = Math.round(1000 / delta);
+        lastFrameTime = now;
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        
+        canvas.toBlob(blob => {
+            if (!isDetecting) return;
+            
+            const formData = new FormData();
+            formData.append("file", blob, "frame.jpg");
+            
+            fetch("http://localhost:8000/predict", {
+                method: "POST",
+                body: formData
+            })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (!isDetecting) return;
+                
+                const cls = data.class;
+                const conf = data.confidence;
+                const style = classMap[cls] || {icon: "❓", color: "#95a5a6"};
+                
+                // Update UI
+                bbox.style.borderColor = style.color;
+                label.style.background = style.color;
+                label.innerHTML = `${style.icon} <strong>${cls.toUpperCase()}</strong><br>${(conf * 100).toFixed(1)}%`;
+                
+                // Update stats
+                predictionCount++;
+                totalConfidence += conf;
+                updateStats();
+            })
+            .catch(error => {
+                console.error("Prediction error:", error);
+                label.innerHTML = "⚠️ Error<br>Check backend";
+                label.style.background = "#e74c3c";
+            });
+        }, "image/jpeg", 0.8);
+    }, 1000); // Predict every 1 second
+}
+
+// Stop detection
+function stopDetection() {
+    isDetecting = false;
+    if (detectionInterval) {
+        clearInterval(detectionInterval);
+        detectionInterval = null;
+    }
+    
+    startBtn.style.display = "inline-block";
+    stopBtn.style.display = "none";
+    
+    label.innerHTML = "⏸️ Detection Paused";
+    label.style.background = "#95a5a6";
+    bbox.style.borderColor = "#95a5a6";
+}
+
+// Update stats
+function updateStats() {
+    document.getElementById("predictionCount").textContent = predictionCount;
+    
+    const avgConf = predictionCount > 0 ? (totalConfidence / predictionCount * 100).toFixed(1) : 0;
+    document.getElementById("avgConfidence").textContent = avgConf + "%";
+    
+    document.getElementById("fps").textContent = currentFPS;
+}
+
+// Show error
+function showError(message) {
+    errorBox.textContent = message;
+    errorBox.style.display = "block";
+    cameraStatus.style.display = "none";
+}
+
+// Show status
+function showStatus(message, type = "info") {
+    statusText.textContent = message;
+    if (type === "success") {
+        setTimeout(() => {
+            cameraStatus.style.display = "none";
+        }, 2000);
+    }
+}
+
+// Event listeners
+startBtn.addEventListener("click", startDetection);
+stopBtn.addEventListener("click", stopDetection);
+
+// Check if backend is running
+fetch("http://localhost:8000/health")
+    .then(res => res.json())
+    .then(() => {
+        initCamera();
+    })
+    .catch(() => {
+        showError("❌ Backend API not reachable. Please ensure backend is running on http://localhost:8000");
+    });
+
+// Cleanup on page unload
+window.addEventListener("beforeunload", () => {
+    stopDetection();
+    if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+    }
+});
+</script>
+
+</body>
+</html>

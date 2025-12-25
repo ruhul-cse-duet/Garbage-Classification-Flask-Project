@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Garbage Classification AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h1>♻️ Garbage Classification</h1>
+        <p class="subtitle">
+            AI-powered waste detection using Deep Learning
+        </p>
+
+        <!-- Mode Selection -->
+        <div class="mode-selection">
+            <button class="mode-btn active" id="uploadBtn">
+                📷 Upload Image
+            </button>
+            <a href="/live" class="mode-btn">
+                📹 Live Camera
+            </a>
+        </div>
+
+        <!-- Upload Form -->
+        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            <label class="upload-box" id="uploadBox">
+                <input type="file" name="image" accept="image/*" required id="fileInput">
+                <span id="uploadText">📷 Click to upload image</span>
+            </label>
+
+            <div id="imagePreview" style="display:none;">
+                <img id="previewImg" alt="Preview">
+                <button type="button" class="remove-btn" onclick="removeImage()">❌ Remove</button>
+            </div>
+
+            <button type="submit" class="btn" id="predictBtn">
+                🔍 Predict
+            </button>
+        </form>
+
+        <!-- Error Display -->
+        {% if error %}
+        <div class="error-box">
+            <strong>⚠️ Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Result Display -->
+        {% if result %}
+        <div class="result">
+            <h2>✅ Prediction Result</h2>
+            <div class="result-box">
+                <div class="result-class">
+                    <span class="class-icon">
+                        {% if result.class == 'battery' %}🔋
+                        {% elif result.class == 'biological' %}🧫
+                        {% elif result.class == 'cardboard' %}📦
+                        {% elif result.class == 'clothes' %}👕
+                        {% elif result.class == 'glass' %}🍾
+                        {% elif result.class == 'metal' %}🥫
+                        {% elif result.class == 'paper' %}📄
+                        {% elif result.class == 'plastic' %}🧴
+                        {% elif result.class == 'shoes' %}👟
+                        {% elif result.class == 'trash' %}🚯
+                        {% endif %}
+                    </span>
+                    <span class="class-name">{{ result.class.upper() }}</span>
+                </div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: {{ result.confidence * 100 }}%"></div>
+                </div>
+                <p class="confidence-text">
+                    <strong>Confidence:</strong> {{ "%.2f"|format(result.confidence * 100) }}%
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Info Box -->
+        <div class="info-box">
+            <p><strong>📋 Supported Categories:</strong></p>
+            <div class="categories">
+                <span>🔋 Battery</span>
+                <span>🧫 Biological</span>
+                <span>📦 Cardboard</span>
+                <span>👕 Clothes</span>
+                <span>🍾 Glass</span>
+                <span>🥫 Metal</span>
+                <span>📄 Paper</span>
+                <span>🧴 Plastic</span>
+                <span>👟 Shoes</span>
+                <span>🚯 Trash</span>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>Developed by Ruhul Amin • FastAPI + Flask + ResNet50</p>
+    </footer>
+</div>
+
+<script>
+// Image preview functionality
+const fileInput = document.getElementById('fileInput');
+const uploadBox = document.getElementById('uploadBox');
+const uploadText = document.getElementById('uploadText');
+const imagePreview = document.getElementById('imagePreview');
+const previewImg = document.getElementById('previewImg');
+const uploadForm = document.getElementById('uploadForm');
+
+fileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Validate file size (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File too large! Maximum size is 10MB.');
+            fileInput.value = '';
+            return;
+        }
+        
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp'];
+        if (!validTypes.includes(file.type)) {
+            alert('Invalid file type! Please upload an image (JPG, PNG, GIF, BMP).');
+            fileInput.value = '';
+            return;
+        }
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            uploadBox.style.display = 'none';
+            imagePreview.style.display = 'block';
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+function removeImage() {
+    fileInput.value = '';
+    uploadBox.style.display = 'block';
+    imagePreview.style.display = 'none';
+    previewImg.src = '';
+}
+
+// Form submission with loading state
+uploadForm.addEventListener('submit', function(e) {
+    const predictBtn = document.getElementById('predictBtn');
+    predictBtn.innerHTML = '⏳ Predicting...';
+    predictBtn.disabled = true;
+});
+
+// Auto-hide error after 10 seconds
+window.addEventListener('load', function() {
+    const errorBox = document.querySelector('.error-box');
+    if (errorBox) {
+        setTimeout(function() {
+            errorBox.style.opacity = '0';
+            setTimeout(function() {
+                errorBox.style.display = 'none';
+            }, 500);
+        }, 10000);
+    }
+});
+</script>
+
+</body>
+</html>
