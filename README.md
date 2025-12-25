@@ -72,7 +72,7 @@ Garbage-Classification-Flask-Project/
 
 ### Step 1: Clone the Repository
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/ruhul-cse-duet/Garbage-Classification-Flask-Project.git
 cd Garbage-Classification-Flask-Project
 ```
 
